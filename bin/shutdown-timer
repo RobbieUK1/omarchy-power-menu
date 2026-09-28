@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# omarchy:summary=Arm or cancel a scheduled shutdown in the user session
+
+# Arms a shutdown that fires after N seconds by scheduling omarchy-system-shutdown
+# on a transient user timer. A stable unit name lets the panel cancel it later.
+
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy-shutdown-timer"
+UNIT="omarchy-shutdown-timer.timer"
+SERVICE="omarchy-shutdown-timer.service"
+
+mkdir -p "$(dirname "$STATE")"
+
+now() { date +%s; }
+
+status() {
+  if [ -f "$STATE" ]; then
+    target=$(cat "$STATE" 2>/dev/null || echo 0)
+    case "$target" in
+      ''|*[!0-9]*) rm -f "$STATE"; printf '{"armed":false,"target":0,"remaining":0}\n'; return ;;
+    esac
+    if systemctl --user --no-legend list-timers --all 2>/dev/null | grep -q "^.*$UNIT"; then
+      rem=$((target - $(now)))
+      [ "$rem" -lt 0 ] && rem=0
+      printf '{"armed":true,"target":%s,"remaining":%s}\n' "$target" "$rem"
+    else
+      rm -f "$STATE"
+      printf '{"armed":false,"target":0,"remaining":0}\n'
+    fi
+  else
+    printf '{"armed":false,"target":0,"remaining":0}\n'
+  fi
+}
+
+arm() {
+  secs="$1"
+  case "$secs" in
+    ''|*[!0-9]*) exit 1 ;;
+  esac
+  if [ "$secs" -lt 1 ] || [ "$secs" -gt 31536000 ]; then
+    exit 1
+  fi
+
+  systemctl --user stop "$UNIT" 2>/dev/null
+  systemctl --user stop "$SERVICE" 2>/dev/null
+
+  if ! systemd-run --user --collect --quiet --unit="omarchy-shutdown-timer" \
+      --on-active="${secs}s" --timer-property=AccuracySec=100ms \
+      omarchy-system-shutdown; then
+    status
+    exit 1
+  fi
+
+  target=$(( $(now) + secs ))
+  printf '%s\n' "$target" > "$STATE"
+  printf '{"armed":true,"target":%s,"remaining":%s}\n' "$target" "$secs"
+}
+
+cancel() {
+  systemctl --user stop "$UNIT" 2>/dev/null
+  systemctl --user stop "$SERVICE" 2>/dev/null
+  rm -f "$STATE"
+  printf '{"armed":false,"target":0,"remaining":0}\n'
+}
+
+case "${1:-status}" in
+  status) status ;;
+  arm) arm "$2" ;;
+  cancel) cancel ;;
+  *) echo "usage: shutdown-timer status|arm <seconds>|cancel" >&2; exit 2 ;;
+esac

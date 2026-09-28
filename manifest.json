@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "robbie.power-menu",
+  "name": "Power Menu",
+  "version": "1.0.0",
+  "author": "robbie",
+  "license": "MIT",
+  "description": "Power button in the bar with a dropdown for lock, suspend, logout, reboot and shutdown",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Power Menu",
+    "description": "Power button in the top-right of the bar. Opens a dropdown with session actions: Lock, Suspend, Hibernate (when available), Logout, Reboot, Shutdown, Update System, Screen Saver and the option to add the widget to the Omarchy menu. Destructive actions ask for a second click to confirm.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

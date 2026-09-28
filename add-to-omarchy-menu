@@ -1,0 +1,251 @@
+#!/usr/bin/env python3
+
+# Keep the robbie.power-menu widget and its enabled actions findable in the
+# Omarchy launch menu (extensions/omarchy-menu.jsonc). The Omarchy menu part
+# is a single "system.*"-shaped row per power action plus the "Power Menu"
+# row that opens the full panel.
+#
+# The widget is the source of truth for what counts as enabled (settings
+# hides/reorders, machine availability). When the IPC answer is unavailable
+# this falls back to the static palette so the script still works standalone.
+#
+# Default menu rows (system.lock, system.suspend, system.logout, ...) already
+# cover most actions with their own guards, so they are never rewritten here:
+# the script only adds rows the default menu does not define and removes only
+# rows this script added (plus the launch row).
+#
+# Subcommands: add  (default) ensure the widget + per-action rows exist
+#              remove        remove them again
+#              status        print 1 if present, 0 otherwise
+# add/remove print the resulting status so callers can refresh their UI.
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+MENU_FILE = os.path.join(HOME, ".config/omarchy/extensions/omarchy-menu.jsonc")
+OMARCHY_PATH = os.environ.get("OMARCHY_PATH", "/usr/share/omarchy")
+DEFAULT_MENU = os.path.join(OMARCHY_PATH, "default/omarchy/omarchy-menu.jsonc")
+
+LAUNCH_KEY = "system.power-menu"
+
+# Full palette, used only when the widget's IPC answer is unavailable. Mirrors
+# Panel.qml buildAllActions. Rows the default menu defines are skipped anyway.
+_FALLBACK = [
+    {"id": "lock", "label": "Lock", "icon": "\uf023", "hint": "Lock the screen", "action": "omarchy-system-lock"},
+    {"id": "suspend", "label": "Suspend", "icon": "\uf186", "hint": "Sleep the computer", "action": "systemctl suspend"},
+    {"id": "logout", "label": "Logout", "icon": "\uf08b", "hint": "End this session", "action": "omarchy-system-logout"},
+    {"id": "reboot", "label": "Reboot", "icon": "\uf01e", "hint": "Restart the computer", "action": "omarchy-system-reboot"},
+    {"id": "shutdown", "label": "Shutdown", "icon": "\uf011", "hint": "Power off the computer", "action": "omarchy-system-shutdown"},
+    {"id": "reboot-timer", "label": "Reboot Timer", "icon": "\uf253", "hint": "Schedule a reboot in a few minutes to hours", "action": "omarchy-shell robbie.power-menu openRebootTimer"},
+    {"id": "shutdown-timer", "label": "Shutdown Timer", "icon": "\uf017", "hint": "Schedule a shutdown in a few minutes to hours", "action": "omarchy-shell robbie.power-menu openShutdownTimer"},
+    {"id": "update", "label": "Update System", "icon": "\uf021", "hint": "Update Omarchy and system packages", "action": "omarchy-launch-terminal omarchy-update"},
+    {"id": "restart-shell", "label": "Restart Shell", "icon": "\uf085", "hint": "Restart the status bar", "action": "omarchy restart shell"},
+    {"id": "btop", "label": "System Activity", "icon": "\uf120", "hint": "Open the system monitor", "action": "bash -lc 'if command -v bpytop >/dev/null 2>&1; then app=\"bpytop\"; else app=\"btop\"; fi; cfg=\"$XDG_RUNTIME_DIR/ilyazar-btop.conf\"; cmd=(\"omarchy-launch-or-focus-tui\" \"--app-id=org.omarchy.btop\" \"$app\"); if [[ \"$app\" == \"btop\" && -f \"$cfg\" ]]; then cmd+=(\"--config\" \"$cfg\"); fi; exec \"${cmd[@]}\"'"},
+    {"id": "caffeinate", "label": "Caffeinate", "icon": "\uf0f4", "hint": "Prevent sleep and screen blanking", "action": "omarchy-toggle-idle toggle"},
+    {"id": "screensaver", "label": "Screen Saver", "icon": "\uf108", "hint": "Start the screen saver now", "action": "omarchy-launch-screensaver"},
+]
+
+
+def notify(msg):
+    try:
+        subprocess.run(
+            ["omarchy-notification-send", "-g", "\U000f0042", msg],
+            check=False, capture_output=True, timeout=5)
+    except Exception:
+        pass
+
+
+def widget_items():
+    """([{id,...}], from_live) — the widget's current rows, or the fallback."""
+    for _attempt in range(2):
+        try:
+            out = subprocess.run(
+                ["omarchy-shell", "robbie.power-menu", "menuItems"],
+                capture_output=True, text=True, timeout=5,
+                env={**os.environ, "OMARCHY_SHELL_IPC_TIMEOUT": "5s"})
+            if out.returncode == 0:
+                items = json.loads(out.stdout)
+                if isinstance(items, list) and items:
+                    return items, True
+            else:
+                _ipc_fail(out)
+        except Exception as e:
+            _ipc_fail(None, exc=e)
+    return _FALLBACK, False
+
+
+def _ipc_fail(out=None, exc=None):
+    try:
+        line = out.stderr.strip().splitlines()
+        line = line[-1] if line else ""
+        with open("/tmp/opencode/ipc-fail.log", "a") as f:
+            f.write("%s cmd=%r rc=%s stderr=%r exc=%r\n"
+                    % (time.strftime("%H:%M:%S"),
+                       (out.args if out else None),
+                       out.returncode if out else None, line, exc))
+    except Exception:
+        pass
+
+
+def default_ids():
+    """Second-level ids already defined under 'system' in the default menu."""
+    try:
+        text = open(DEFAULT_MENU, encoding="utf-8").read()
+    except OSError:
+        return set()
+    return set(re.findall(r'"system\.([A-Za-z0-9_.-]+)"', text))
+
+
+def entry_line(key, item):
+    body = {
+        "icon": str(item.get("icon", "")),
+        "label": str(item.get("label", key)),
+        "description": str(item.get("hint", "")),
+        "action": str(item.get("action", "")),
+    }
+    return '  "%s": %s,\n' % (key, json.dumps(body, ensure_ascii=False))
+
+
+def launch_line():
+    body = {
+        "icon": "\U000f040a",
+        "label": "Power Menu",
+        "description": "Open the bar power menu",
+        "action": "omarchy-shell robbie.power-menu openCenter",
+    }
+    return '  "%s": %s,\n' % (LAUNCH_KEY, json.dumps(body, ensure_ascii=False))
+
+
+def insert_lines(lines):
+    """Idempotently insert entry lines just before the file's final closing
+    brace. Returns True if anything was written."""
+    text = open(MENU_FILE, encoding="utf-8").read() if os.path.exists(MENU_FILE) else ""
+    closing = -1
+    for i, line in enumerate(text.splitlines()):
+        if re.match(r"^\s*}\s*$", line):
+            closing = i
+    if closing < 0:
+        # Unterminated or missing file: build a fresh one.
+        header = (
+            "{\n"
+            "  // Managed in part by the robbie.power-menu widget (Power Menu,\n"
+            "  // Shutdown Timer, ...). Toggle that widget's \"Show in Omarchy\n"
+            "  // Menu\" row, or edit the file directly - the menu picks edits\n"
+            "  // up on the next summon.\n"
+        )
+        text = header + "}\n"
+        closing = len(text.splitlines()) - 1
+
+    chunks = text.splitlines()
+    existing = {m.group(1) for m in re.finditer(r'"([A-Za-z0-9_.-]+)"\s*:', text)}
+    added = []
+    for line in lines:
+        key = re.match(r'\s*"([A-Za-z0-9_.-]+)"', line).group(1)
+        if key in existing:
+            continue
+        existing.add(key)
+        # Re-scan for a new closing brace with each insert.
+        closing = -1
+        for i, l in enumerate(chunks):
+            if re.match(r"^\s*}\s*$", l):
+                closing = i
+        if closing < 0:
+            chunks.extend(["", line, "}"])
+        else:
+            chunks = chunks[:closing] + [line.rstrip("\n")] + chunks[closing:]
+        added.append(key)
+
+    if added:
+        open(MENU_FILE, "w", encoding="utf-8").write("\n".join(chunks) + "\n")
+    return bool(added)
+
+
+def remove_keys(keys):
+    """Drop any lines carrying one of the keys. Returns True if anything was
+    removed (so callers can skip rewrites and notifications on no-ops)."""
+    if not os.path.exists(MENU_FILE):
+        return False
+    text = open(MENU_FILE, encoding="utf-8").read()
+    lines = text.splitlines()
+    kept = [l for l in lines if not any('"%s"' % k in l for k in keys)]
+    if len(kept) == len(lines):
+        return False
+    open(MENU_FILE, "w", encoding="utf-8").write("\n".join(kept) + "\n")
+    return True
+
+
+def is_present():
+    if not os.path.exists(MENU_FILE):
+        return False
+    return any('"%s"' % LAUNCH_KEY in line
+               for line in open(MENU_FILE, encoding="utf-8"))
+
+
+def managed_entry_lines(items):
+    """Launch row plus one row per enabled action the default menu lacks."""
+    defaults = default_ids()
+    lines = [launch_line()]
+    for item in items:
+        key = "system." + item["id"]
+        if item["id"] in defaults:
+            continue
+        lines.append(entry_line(key, item))
+    return lines
+
+
+def do_add():
+    items, from_live = widget_items()
+    changed = insert_lines(managed_entry_lines(items))
+    if from_live:
+        changed = prune_stale(items) or changed
+    if changed:
+        notify("Power Menu and its actions are now in the Omarchy menu (System)")
+    print_status()
+
+
+def prune_stale(items):
+    """Drop rows this script may have added whose action is no longer enabled
+    (hidden in the widget's settings or unavailable). Only runs when the live
+    widget answered, so a brief IPC hiccup never deletes anything. Returns True
+    if anything was removed."""
+    defaults = default_ids()
+    all_managed = set()
+    for it in _FALLBACK + items:
+        if it["id"] not in defaults:
+            all_managed.add("system." + it["id"])
+    current = {"system." + it["id"] for it in items if it["id"] not in defaults}
+    stale = sorted(all_managed - current)
+    if stale:
+        return remove_keys(stale)
+    return False
+
+
+def do_remove():
+    items, _ = widget_items()
+    defaults = default_ids()
+    managed = {LAUNCH_KEY}
+    for it in _FALLBACK + items:
+        if it["id"] not in defaults:
+            managed.add("system." + it["id"])
+    remove_keys(sorted(managed))
+    notify("Removed Power Menu from the Omarchy menu")
+    print_status()
+
+
+def print_status():
+    sys.stdout.write("1\n" if is_present() else "0\n")
+
+
+if __name__ == "__main__":
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "add"
+    if cmd == "status":
+        print_status()
+    elif cmd == "remove":
+        do_remove()
+    else:
+        do_add()
