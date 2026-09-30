@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.1
+
+### Fixed
+
+- The install docs still told people to add `{ "id": "robbie.power-menu" }` to
+  `shell.json` by hand, which made a one-command install look like it needed a
+  second step. It never did: `omarchy plugin add --enable` places the widget in
+  the bar's **right** section on its own, because `barWidget.defaultSection`
+  says `right`. Verified by disabling the widget and re-enabling it with no
+  section flag — it returned to `right`. The README now says so, and gives the
+  one-line recovery command for when the widget is removed on purpose.
+
 ## 1.2.0
 
 ### Changed

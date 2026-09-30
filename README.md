@@ -57,13 +57,16 @@ omarchy plugin add https://github.com/RobbieUK1/omarchy-power-menu.git --enable
 omarchy restart shell
 ```
 
-Then right-click your bar -> **Configure bar** (or edit
-`~/.config/omarchy/shell.json`) and add the widget to a section:
+`--enable` is the whole job. It enables the widget and puts it in the bar's
+**right** section on its own, because `barWidget.defaultSection` in
+`manifest.json` says `right`; add `--yes` to skip the placement question and
+take the default. Nothing needs adding to `shell.json` by hand.
 
-```json
-"right": [
-  { "id": "robbie.power-menu" }
-]
+If you ever remove the widget, put it back with:
+
+```sh
+omarchy plugin enable robbie.power-menu   # goes to the right section
+omarchy bar move robbie.power-menu --section center   # or somewhere else
 ```
 
 ## How it works
