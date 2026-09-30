@@ -17,10 +17,10 @@ import qs.Ui
 //
 // "Shutdown Timer" and "Reboot Timer" switch the same dropdown to a timer view
 // (Esc/Back to return) that arms a scheduled shutdown or reboot via
-// bar/scripts/shutdown-timer / bar/scripts/reboot-timer and shows a live
-// countdown with a cancel option. Both views share the transient user units
-// omarchy-shutdown-timer.timer / omarchy-reboot-timer.timer, so the standalone
-// timer widgets and the menu can arm and cancel the same schedules.
+// bin/shutdown-timer / bin/reboot-timer in this plugin's own directory and
+// shows a live countdown with a cancel option. Both views share the transient
+// user units omarchy-shutdown-timer.timer / omarchy-reboot-timer.timer, so the
+// standalone timer widgets and the menu can arm and cancel the same schedules.
 //
 // "Caffeinate" toggles omarchy-toggle-idle (prevent sleep / screen blanking)
 // and stays open so the active state is visible; it is refreshed whenever the
@@ -376,7 +376,7 @@ Panel {
   function toggleMenuEntry() {
     if (root.menuBusy) return
     root.menuBusy = true
-    menuToggleProc.command = ["bash", "-lc", root.expandPath("~/.config/omarchy/plugins/robbie.power-menu/add-to-omarchy-menu") + (root.inOmarchyMenu ? " remove" : " add")]
+    menuToggleProc.command = ["bash", "-lc", root.shellQuote(root.scriptPath("add-to-omarchy-menu")) + (root.inOmarchyMenu ? " remove" : " add")]
     if (!menuToggleProc.running) menuToggleProc.running = true
   }
 
@@ -412,7 +412,7 @@ Panel {
   function syncMenuEntries() {
     if (!root.inOmarchyMenu) return
     if (menuSyncProc.running) return
-    menuSyncProc.command = ["bash", "-lc", root.expandPath("~/.config/omarchy/plugins/robbie.power-menu/add-to-omarchy-menu") + " add"]
+    menuSyncProc.command = ["bash", "-lc", root.shellQuote(root.scriptPath("add-to-omarchy-menu")) + " add"]
     menuSyncProc.running = true
   }
 
@@ -536,16 +536,41 @@ Panel {
 
   // ---- shutdown timer ----
 
-  function expandPath(s) {
-    if (String(s).charAt(0) === "~") return (Quickshell.env("HOME") || "/root") + String(s).substring(1)
-    return String(s)
+  // The helper scripts and the menu-sync script live in this plugin's own
+  // directory, so `omarchy plugin add --enable` is the whole install. Deriving
+  // the directory from this file's own URL keeps the plugin self-contained: it
+  // never has to guess where it was cloned to, and it never writes outside
+  // itself. Qt.resolvedUrl resolves relative to Panel.qml.
+  readonly property string pluginDir: {
+    var u = String(Qt.resolvedUrl("."))
+    var p = u.replace(/^file:\/\//, "").replace(/\/+$/, "")
+    // A directory name may legitimately contain a '%' that is not an escape
+    // sequence, which decodeURIComponent rejects; fall back to the raw form.
+    try { return decodeURIComponent(p) } catch (e) { return p }
   }
 
-  function timerScript() {
-    return root.timerKind === "reboot"
-      ? "~/.config/omarchy/bar/scripts/reboot-timer"
-      : "~/.config/omarchy/bar/scripts/shutdown-timer"
+  // Paths reach the shell through `bash -lc`, so they must survive spaces.
+  function shellQuote(p) {
+    return "'" + String(p).replace(/'/g, "'\\''") + "'"
   }
+
+  function scriptPath(name) {
+    return root.pluginDir + "/" + name
+  }
+
+  function timerScriptById(id) {
+    return root.scriptPath("bin/" + (id === "reboot-timer" ? "reboot-timer" : "shutdown-timer"))
+  }
+
+  // Every timer invocation goes through here, so the quoting and the verb live
+  // in one place instead of at each call site.
+  function timerCommand(id, verb, seconds) {
+    var cmd = root.shellQuote(root.timerScriptById(id)) + " " + verb
+    if (seconds !== undefined) cmd += " " + Number(seconds)
+    return cmd
+  }
+
+  readonly property string currentTimerId: root.timerKind === "reboot" ? "reboot-timer" : "shutdown-timer"
 
   function timerNoun() {
     return root.timerKind === "reboot" ? "reboot" : "shutdown"
@@ -618,23 +643,17 @@ Panel {
   }
 
   function armTimer(seconds) {
-    timerArmProc.command = ["bash", "-lc", root.expandPath(root.timerScript()) + " arm " + Number(seconds)]
+    timerArmProc.command = ["bash", "-lc", root.timerCommand(root.currentTimerId, "arm", seconds)]
     if (!timerArmProc.running) timerArmProc.running = true
   }
 
   function cancelTimer() {
-    timerCancelProc.command = ["bash", "-lc", root.expandPath(root.timerScript()) + " cancel"]
+    timerCancelProc.command = ["bash", "-lc", root.timerCommand(root.currentTimerId, "cancel")]
     if (!timerCancelProc.running) timerCancelProc.running = true
   }
 
-  function timerScriptById(id) {
-    return id === "reboot-timer"
-      ? "~/.config/omarchy/bar/scripts/reboot-timer"
-      : "~/.config/omarchy/bar/scripts/shutdown-timer"
-  }
-
   function cancelTimerById(id) {
-    timerCancelProc.command = ["bash", "-lc", root.expandPath(root.timerScriptById(id)) + " cancel"]
+    timerCancelProc.command = ["bash", "-lc", root.timerCommand(id, "cancel")]
     if (!timerCancelProc.running) timerCancelProc.running = true
   }
 
@@ -840,13 +859,13 @@ Panel {
 
   Process {
     id: menuStatusProc
-    command: ["bash", "-lc", root.expandPath("~/.config/omarchy/plugins/robbie.power-menu/add-to-omarchy-menu") + " status"]
+    command: ["bash", "-lc", root.shellQuote(root.scriptPath("add-to-omarchy-menu")) + " status"]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyMenuStatus(text) }
   }
 
   Process {
     id: menuToggleProc
-    command: ["bash", "-lc", root.expandPath("~/.config/omarchy/plugins/robbie.power-menu/add-to-omarchy-menu") + " status"]
+    command: ["bash", "-lc", root.shellQuote(root.scriptPath("add-to-omarchy-menu")) + " status"]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyMenuStatus(text) }
   }
 
@@ -854,31 +873,31 @@ Panel {
   // changed while the widget is already listed in the launch menu).
   Process {
     id: menuSyncProc
-    command: ["bash", "-lc", root.expandPath("~/.config/omarchy/plugins/robbie.power-menu/add-to-omarchy-menu") + " add"]
+    command: ["bash", "-lc", root.shellQuote(root.scriptPath("add-to-omarchy-menu")) + " add"]
     stdout: StdioCollector { waitForEnd: true }
   }
 
   Process {
     id: shutdownStatusProc
-    command: ["bash", "-lc", root.expandPath("~/.config/omarchy/bar/scripts/shutdown-timer") + " status"]
+    command: ["bash", "-lc", root.timerCommand("shutdown-timer", "status")]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyTimerStatus(text, "shutdown") }
   }
 
   Process {
     id: rebootStatusProc
-    command: ["bash", "-lc", root.expandPath("~/.config/omarchy/bar/scripts/reboot-timer") + " status"]
+    command: ["bash", "-lc", root.timerCommand("reboot-timer", "status")]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyTimerStatus(text, "reboot") }
   }
 
   Process {
     id: timerArmProc
-    command: ["bash", "-lc", root.expandPath(root.timerScript()) + " status"]
+    command: ["bash", "-lc", root.timerCommand(root.currentTimerId, "status")]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyTimerStatus(text, root.timerKind) }
   }
 
   Process {
     id: timerCancelProc
-    command: ["bash", "-lc", root.expandPath(root.timerScript()) + " cancel"]
+    command: ["bash", "-lc", root.timerCommand(root.currentTimerId, "cancel")]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyTimerStatus(text, root.timerKind) }
   }
 
@@ -939,6 +958,7 @@ Panel {
       root.open()
     }
     function openCentered(): void { root.openCenter() }
+
 
     // Direct session actions for keybinds/scripts, mirroring the menu entries.
     function lock(): void { Quickshell.execDetached(["omarchy-system-lock"]) }

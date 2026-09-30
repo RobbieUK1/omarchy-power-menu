@@ -49,18 +49,12 @@ colour, since that state is both urgent and already moving.
 
 ## Install
 
+One command. The plugin is self-contained: the two timer helpers run from
+`bin/` inside the plugin directory, so there is nothing to copy out afterwards.
+
 ```sh
 omarchy plugin add https://github.com/RobbieUK1/omarchy-power-menu.git --enable
 omarchy restart shell
-```
-
-The two timer actions shell out to helper scripts that ship in `bin/` but have
-to live outside the plugin directory:
-
-```sh
-mkdir -p ~/.config/omarchy/bar/scripts
-install -m 755 bin/reboot-timer   ~/.config/omarchy/bar/scripts/reboot-timer
-install -m 755 bin/shutdown-timer ~/.config/omarchy/bar/scripts/shutdown-timer
 ```
 
 Then right-click your bar -> **Configure bar** (or edit
@@ -97,7 +91,14 @@ That script is deliberately conservative:
 
 Both timer actions schedule `omarchy-system-reboot` / `omarchy-system-shutdown`
 on transient user timers with stable unit names, so an armed timer survives a
-shell restart and can be cancelled from any later session.
+shell restart and can be cancelled from any later session. They can also be run
+by hand:
+
+```sh
+./bin/reboot-timer status
+./bin/reboot-timer arm 900      # reboot in 15 minutes
+./bin/reboot-timer cancel
+```
 
 `CenterableKeyboardPanel.qml` is a variant of the stock panel that can be
 centred on screen, used where a bottom-anchored dropdown would sit awkwardly.

@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.2.0
+
+### Changed
+
+- **Install is a single command.** The panel used to shell out to
+  `~/.config/omarchy/bar/scripts/{reboot,shutdown}-timer`, which meant a manual
+  `mkdir` + `install` step after every fresh `omarchy plugin add`. Those scripts
+  are committed mode `755` and now run from `bin/` inside the plugin directory,
+  so `omarchy plugin add <url> --enable` is the whole install and
+  `omarchy plugin remove` leaves nothing behind.
+- The plugin derives its own directory from `Qt.resolvedUrl` instead of
+  hardcoding `~/.config/omarchy/plugins/robbie.power-menu`. It no longer has to
+  assume where it was cloned to, which also fixes a latent bug: `add-to-omarchy-menu`
+  was hardcoded to that path in five places, so a `omarchy plugin clone` or a
+  manual relocation would have broken the "Show in Omarchy Menu" action.
+
+### Added
+
+- Shell-quoting for every path that reaches `bash -lc`, so a plugin directory
+  containing spaces no longer splits the command.
+- `pluginDir` percent-decodes its own URL and falls back to the raw path if the
+  directory name contains a `%` that is not a valid escape, which
+  `decodeURIComponent` would otherwise throw on.
+
+### Internal
+
+- Timer invocations go through one `timerCommand(id, verb, seconds)` helper
+  instead of concatenating paths and verbs at each of the seven call sites, and
+  `currentTimerId` replaces the same `timerKind === "reboot" ? ...` ternary
+  repeated three times.
+- Dropped the now-unused `expandPath()`; no path is `~`-prefixed any more.
+
+### Note
+
+- The shared copies in `~/.config/omarchy/bar/scripts/` were left in place: the
+  `robbie.shutdown-timer` and `robbie.menu` plugins still call them. They are no
+  longer used by this plugin.
+
 ## 1.1.0
 
 ### Added
