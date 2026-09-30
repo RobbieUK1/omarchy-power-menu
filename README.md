@@ -26,6 +26,22 @@ Actions can be hidden and reordered from the panel's settings. Destructive ones
 ask for a second click to confirm, and the confirm window is configurable
 (`confirmSeconds`, default 5, clamped to 2-30).
 
+## Appearance
+
+The widget carries two states that are meant to be readable across the room,
+and it deliberately does not shout when there is nothing wrong:
+
+| State                          | Bar button and rows              |
+|--------------------------------|----------------------------------|
+| Idle                           | Theme accent, steady             |
+| Caffeinate on                  | Steady brown (`#a2734b`)         |
+| Reboot/Shutdown Timer armed    | Pulses accent to yellow or red   |
+
+An armed timer flashes for as long as it is armed, not just in its final ten
+minutes, and the row label, its countdown and the cancel affordance all pulse
+with the bar icon. A pending timer outranks Caffeinate for the bar button's
+colour, since that state is both urgent and already moving.
+
 ## Requirements
 
 - Omarchy shell
@@ -89,3 +105,5 @@ centred on screen, used where a bottom-anchored dropdown would sit awkwardly.
 ## License
 
 MIT
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.

@@ -59,7 +59,6 @@ Panel {
   property var timerRows: []
   property int timerCursor: 0
   property real powerPulse: 0.0
-  property real criticalPulse: 0.0
 
   property bool shutdownArmed: false
   property int shutdownTarget: 0
@@ -69,10 +68,6 @@ Panel {
   property int rebootRemaining: 0
 
   readonly property bool anyTimer: root.shutdownArmed || root.rebootArmed
-
-  // Whether a scheduled shutdown or reboot is inside the last 10 minutes.
-  readonly property bool anyCritical: (root.shutdownArmed && root.shutdownRemaining <= 600)
-    || (root.rebootArmed && root.rebootRemaining <= 600)
 
   // Whether the power widget is currently listed in the Omarchy launch menu.
   property bool inOmarchyMenu: false
@@ -101,6 +96,18 @@ Panel {
   readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property color flashColor: root.rebootArmed && !root.shutdownArmed ? "#ffd24a" : "#e5484d"
+  readonly property color caffeineColor: "#a2734b"
+  // Caffeinate claims the bar button's resting tint as well, so the icon, its
+  // pill and the menu row all read brown while it is on. A pending timer still
+  // wins, because that state pulses toward flashColor.
+  readonly property color barAccent: root.caffeinated && !root.anyTimer ? root.caffeineColor : root.accent
+
+  // Single definition of the armed-timer pulse, shared by the bar dropdown and
+  // the centered card: a row breathes from its own resting text color toward
+  // flashColor, so both row styles flash in lockstep with the bar button.
+  function timerAlert(base) {
+    return root.mixColor(base, root.flashColor, root.powerPulse)
+  }
 
   // --- Omarchy launch-menu palette (used when the panel is opened centered
   // from the launch menu so it matches the menu's own format exactly) ---
@@ -574,34 +581,6 @@ Panel {
     if (!rebootStatusProc.running) rebootStatusProc.running = true
   }
 
-  function armedFor(kind) {
-    return kind === "reboot" ? root.rebootArmed : root.shutdownArmed
-  }
-
-  function targetFor(kind) {
-    return kind === "reboot" ? root.rebootTarget : root.shutdownTarget
-  }
-
-  function remainingFor(kind) {
-    return kind === "reboot" ? root.rebootRemaining : root.shutdownRemaining
-  }
-
-  function rowKind(id) {
-    return id === "reboot-timer" ? "reboot" : "shutdown"
-  }
-
-  // True when the given timer row is armed and inside its final 10 minutes.
-  function rowTimerCritical(id) {
-    if (id === "reboot-timer") return root.rebootArmed && root.rebootRemaining <= 600
-    if (id === "shutdown-timer") return root.shutdownArmed && root.shutdownRemaining <= 600
-    return false
-  }
-
-  // Critical state for whichever timer kind the timer view is currently showing.
-  function currentTimerCritical() {
-    return root.timerArmed && root.timerRemaining <= 600
-  }
-
   function applyTimerStatus(raw, kind) {
     var data = {}
     try { data = JSON.parse(raw) } catch (e) { data = {} }
@@ -629,11 +608,12 @@ Panel {
       root.rebootTarget = 0
       recheckTimer.restart()
     }
+    // Collapse the two timers down to whichever one the timer view is showing.
     var prevArmed = root.timerArmed
-    var viewArmed = root.armedFor(root.timerKind)
-    root.timerArmed = viewArmed
-    root.timerTarget = root.targetFor(root.timerKind)
-    root.timerRemaining = root.remainingFor(root.timerKind)
+    var isReboot = root.timerKind === "reboot"
+    root.timerArmed = isReboot ? root.rebootArmed : root.shutdownArmed
+    root.timerTarget = isReboot ? root.rebootTarget : root.shutdownTarget
+    root.timerRemaining = isReboot ? root.rebootRemaining : root.shutdownRemaining
     if (root.timerArmed !== prevArmed && root.view === "timer") root.rebuildTimerRows()
   }
 
@@ -800,15 +780,18 @@ Panel {
     return p(m) + ":" + p(sec)
   }
 
-  function timerRowLabel(id) {
-    var remaining = id === "reboot-timer" ? root.rebootRemaining : root.shutdownRemaining
-    var noun = id === "reboot-timer" ? "Reboot" : "Shutdown"
-    return noun + " " + root.formatRemaining(remaining)
+  // The row's own name, kept verbatim whether or not a timer is armed.
+  function timerRowName(id) {
+    return id === "reboot-timer" ? "Reboot Timer" : "Shutdown Timer"
   }
 
-  function fireTimeLabel() {
-    if (root.timerTarget <= 0) return ""
-    return new Date(root.timerTarget * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  // Name plus the live countdown, so arming a timer adds information instead
+  // of replacing "Shutdown Timer"/"Reboot Timer" with a bare number. Only the
+  // dropdown rows have the width for this; the menu-styled rows render the
+  // countdown in their own trailing slot.
+  function timerRowLabel(id) {
+    var remaining = id === "reboot-timer" ? root.rebootRemaining : root.shutdownRemaining
+    return root.timerRowName(id) + " \u00b7 " + root.formatRemaining(remaining)
   }
 
   function caption() {
@@ -931,22 +914,14 @@ Panel {
     onTriggered: root.refreshTimer()
   }
 
-  // Pulses root.powerPulse 0..1 while a timer is armed so the bar button and
-  // its pill flash between accent and the timer's warning color.
+  // Pulses root.powerPulse 0..1 while a timer is armed so the bar button, its
+  // pill and the armed timer rows all flash together between accent and the
+  // timer's warning color.
   SequentialAnimation {
     running: root.anyTimer
     loops: Animation.Infinite
     NumberAnimation { target: root; property: "powerPulse"; to: 1.0; duration: 520; easing.type: Easing.InOutQuad }
     NumberAnimation { target: root; property: "powerPulse"; to: 0.0; duration: 520; easing.type: Easing.InOutQuad }
-  }
-
-  // Pulses root.criticalPulse 0..1 while a timer is inside its last 10
-  // minutes so the row countdown visibly pulses toward red in the menu.
-  SequentialAnimation {
-    running: root.anyCritical
-    loops: Animation.Infinite
-    NumberAnimation { target: root; property: "criticalPulse"; to: 1.0; duration: 520; easing.type: Easing.InOutQuad }
-    NumberAnimation { target: root; property: "criticalPulse"; to: 0.0; duration: 520; easing.type: Easing.InOutQuad }
   }
 
   IpcHandler {
@@ -1059,8 +1034,14 @@ Panel {
       readonly property bool rowCaf: modelData.id === "caffeinate" && root.caffeinated
       readonly property bool rowTimerArmed: (modelData.id === "reboot-timer" && root.rebootArmed)
         || (modelData.id === "shutdown-timer" && root.shutdownArmed)
-      readonly property bool rowCritical: inActions && rowTimerArmed && root.rowTimerCritical(modelData.id)
-      readonly property bool rowDanger: modelData.dangerous === true || modelData.id === "cancel"
+      readonly property int rowTimerRemaining: modelData && modelData.id === "reboot-timer" ? root.rebootRemaining : root.shutdownRemaining
+      // An armed timer row borrows the bar button's pulse, so the list reads
+      // as live the same way the icon does: normal text breathing toward
+      // flashColor (yellow for a lone reboot timer, red once a shutdown is
+      // also pending) for as long as the schedule stands.
+      readonly property color rowAlert: inActions && rowTimerArmed
+        ? root.timerAlert(root.menuText)
+        : root.menuText
       readonly property bool drill: modelData.settingsEntry === true
         || modelData.id === "shutdown-timer"
         || modelData.id === "reboot-timer"
@@ -1070,7 +1051,7 @@ Panel {
       readonly property string rowLabel: inSettings
         ? (modelData ? String(modelData.label) : "")
         : (rowTimerArmed
-            ? root.timerRowLabel(modelData.id)
+            ? root.timerRowName(modelData.id)
             : (rowArmed ? "Confirm " + modelData.label + "?" : (rowCaf ? "\u2713 " + modelData.label : modelData.label)))
 
       width: parent.width
@@ -1123,18 +1104,38 @@ Panel {
         id: label
         anchors.left: String(modelData.icon).length > 0 ? iconSpot.right : parent.left
         anchors.leftMargin: String(modelData.icon).length > 0 ? Style.space(6) : mrow.rLeft + Style.space(18)
-        anchors.right: mrow.inSettings ? (mrow.rowLocked ? parent.right : settingsToggle.left) : (mrow.rowTimerArmed ? timerCancelSpot.left : chevronSpot.left)
+        anchors.right: mrow.inSettings
+          ? (mrow.rowLocked ? parent.right : settingsToggle.left)
+          : (mrow.rowTimerArmed ? timerCountSpot.left : chevronSpot.left)
         anchors.rightMargin: mrow.inSettings ? (mrow.rowLocked ? mrow.rRight + Style.space(8) : Style.space(6)) : Style.space(6)
         anchors.verticalCenter: parent.verticalCenter
         text: mrow.rowLabel
         color: mrow.selectedRow ? Color.menu.selectedText
-          : (mrow.rowCritical ? root.mixColor(root.menuText, root.urgent, root.criticalPulse)
-            : (mrow.inSettings && mrow.rowHidden ? root.dim : root.menuText))
+          : (mrow.inSettings
+              ? (mrow.rowHidden ? root.dim : root.menuText)
+              : (mrow.rowCaf ? root.caffeineColor : mrow.rowAlert))
         opacity: mrow.inSettings && mrow.rowHidden ? 0.5 : 1.0
         font.family: root.menuFontFamily
         font.pixelSize: Style.font.heading
         font.weight: Font.Medium
         elide: Text.ElideRight
+      }
+
+      // The countdown rides in its own trailing slot so the row name never has
+      // to give up room to it.
+      Text {
+        id: timerCountSpot
+        visible: mrow.rowTimerArmed && !mrow.inSettings
+        anchors.right: timerCancelSpot.left
+        anchors.rightMargin: Style.space(8)
+        anchors.verticalCenter: parent.verticalCenter
+        horizontalAlignment: Text.AlignRight
+        text: root.formatRemaining(mrow.rowTimerRemaining)
+        color: mrow.selectedRow ? Color.menu.selectedText : mrow.rowAlert
+        opacity: 1.0
+        font.family: root.menuFontFamily
+        font.pixelSize: Style.font.body
+        font.weight: Font.Medium
       }
 
       Text {
@@ -1180,8 +1181,8 @@ Panel {
         Text {
           anchors.centerIn: parent
           text: "\uf057"
-          color: mrow.selectedRow ? Color.menu.selectedText : (mrow.rowCritical ? root.mixColor(root.menuText, root.urgent, root.criticalPulse) : root.menuText)
-          opacity: mrow.selectedRow || mrow.rowCritical ? 1.0 : 0.6
+          color: mrow.selectedRow ? Color.menu.selectedText : mrow.rowAlert
+          opacity: 1.0
           font.family: root.menuFontFamily
           font.pixelSize: Style.font.title
           horizontalAlignment: Text.AlignHCenter
@@ -1270,21 +1271,22 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  // Eye-catching pill behind the power icon: accent-tinted by default,
-  // switching to the urgent color while a shutdown/reboot timer is armed.
+  // Eye-catching pill behind the power icon: accent-tinted by default, brown
+  // while Caffeinate is on, pulsing toward flashColor while a
+  // shutdown/reboot timer is armed. The armed timer rows in the lists ride
+  // this same pulse.
   Rectangle {
     id: powerSpot
     anchors.centerIn: parent
     width: Math.max(1, Math.round(button.implicitWidth - Style.space(2)))
     height: Math.max(1, Math.round(button.implicitHeight - Style.space(10)))
     radius: Math.max(1, Math.round(height / 2))
-    color: root.anyTimer
-      ? Util.alpha(root.mixColor(root.accent, root.flashColor, root.powerPulse), 0.24)
-      : Util.alpha(root.accent, 0.15)
+    // Fill and border read one pulsed color, just at different opacities, so
+    // they can never disagree about where in the pulse they are.
+    readonly property color pulseColor: root.anyTimer ? root.timerAlert(root.accent) : "transparent"
+    color: root.anyTimer ? Util.alpha(pulseColor, 0.24) : Util.alpha(root.barAccent, 0.15)
     border.width: Math.max(1, Math.round(Style.space(1)))
-    border.color: root.anyTimer
-      ? Util.alpha(root.mixColor(root.accent, root.flashColor, root.powerPulse), 0.55)
-      : Util.alpha(root.accent, 0.38)
+    border.color: root.anyTimer ? Util.alpha(pulseColor, 0.55) : Util.alpha(root.barAccent, 0.38)
   }
 
   BarIconButton {
@@ -1298,9 +1300,7 @@ Panel {
       ? "Power \u00b7 reboot in " + root.formatRemaining(root.rebootRemaining)
       : (root.caffeinated ? "Power \u00b7 Caffeinate active" : "Power"))
     active: true
-    activeColor: root.anyTimer
-      ? root.mixColor(root.accent, root.flashColor, root.powerPulse)
-      : root.accent
+    activeColor: root.anyTimer ? root.timerAlert(root.accent) : root.barAccent
     onPressed: function(buttonCode) { root.centered = false; root.toggle() }
   }
 
@@ -1643,12 +1643,15 @@ Panel {
                 readonly property bool timerRow: modelData.id === "shutdown-timer" || modelData.id === "reboot-timer"
                 readonly property bool timerRowArmed: timerRow && (modelData.id === "reboot-timer"
                   ? root.rebootArmed : root.shutdownArmed)
-                readonly property int timerRowRemaining: timerRow
-                  ? (modelData.id === "reboot-timer" ? root.rebootRemaining : root.shutdownRemaining)
-                  : 0
                 readonly property bool armed: root.armedId === modelData.id
                 readonly property bool cafOn: modelData.id === "caffeinate" && root.caffeinated
-                readonly property bool rowCritical: timerRowArmed && root.rowTimerCritical(modelData.id)
+                // Mirrors the menu-format rows: an armed timer breathes
+                // between the resting text color and flashColor, and an active
+                // Caffeinate holds a steady brown instead of the urgent red
+                // the session-ending rows borrow.
+                readonly property color rowAlert: timerRowArmed
+                  ? root.timerAlert(root.foreground)
+                  : root.urgent
 
                 width: parent.width
                 leftAlign: true
@@ -1658,9 +1661,9 @@ Panel {
                   : (armed ? "Confirm " + modelData.label + "?" : (cafOn ? modelData.label + "\u00b7 Active" : modelData.label))
                 fontSize: Style.font.body
                 iconSize: Style.font.title
-                foreground: armed || timerRowArmed || cafOn
-                  ? (rowCritical ? root.mixColor(root.urgent, "#ff8a7a", root.criticalPulse) : root.urgent)
-                  : root.foreground
+                foreground: cafOn
+                  ? root.caffeineColor
+                  : (armed ? root.urgent : (timerRowArmed ? rowAlert : root.foreground))
                 accent: root.urgent
                 fontFamily: root.fontFamily
                 hasCursor: root.cursorIndex === index
@@ -1684,7 +1687,7 @@ Panel {
                   Text {
                     anchors.centerIn: parent
                     text: "\uf057"
-                    color: rowCritical ? root.mixColor(root.urgent, "#ff8a7a", root.criticalPulse) : root.urgent
+                    color: rowAlert
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.title
                     font.bold: true

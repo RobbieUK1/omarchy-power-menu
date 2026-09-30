@@ -83,7 +83,7 @@ def _ipc_fail(out=None, exc=None):
     try:
         line = out.stderr.strip().splitlines()
         line = line[-1] if line else ""
-        with open("/tmp/opencode/ipc-fail.log", "a") as f:
+        with open("/tmp/omarchy-power-menu-ipc.log", "a") as f:
             f.write("%s cmd=%r rc=%s stderr=%r exc=%r\n"
                     % (time.strftime("%H:%M:%S"),
                        (out.args if out else None),
