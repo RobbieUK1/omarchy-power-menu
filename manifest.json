@@ -3,7 +3,7 @@
   "id": "robbie.power-menu",
   "name": "Power Menu",
   "version": "1.2.1",
-  "author": "robbie",
+  "author": "RobbieUK1",
   "license": "MIT",
   "description": "Power button in the bar with a dropdown for lock, suspend, logout, reboot and shutdown",
   "kinds": [
