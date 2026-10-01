@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "robbie.power-menu",
   "name": "Power Menu",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "author": "RobbieUK1",
   "license": "MIT",
   "description": "Power button in the bar with a dropdown for lock, suspend, logout, reboot and shutdown",
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Power Menu",
-    "description": "Power button in the top-right of the bar. Opens a dropdown with session actions: Lock, Suspend, Hibernate (when available), Logout, Reboot, Shutdown, Update System, Screen Saver and the option to add the widget to the Omarchy menu. Destructive actions ask for a second click to confirm.",
+    "description": "Power button in the top-right of the bar. Opens a dropdown with session actions: Lock, Suspend, Hibernate (when available), Logout, Reboot, Shutdown, Update System, Screen Saver and the option to add the widget to the Omarchy menu. Destructive actions ask for a second click to confirm. Every action is also callable over IPC for keybindings and scripts, including arming the reboot and shutdown timers.",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right"

@@ -106,6 +106,69 @@ by hand:
 `CenterableKeyboardPanel.qml` is a variant of the stock panel that can be
 centred on screen, used where a bottom-anchored dropdown would sit awkwardly.
 
+## Scripting and keybindings
+
+Every action is reachable over IPC, so you can bind keys or drive the widget
+from scripts without going through the menu:
+
+```sh
+omarchy-shell robbie.power-menu <function> [args]
+```
+
+### Panel control
+
+| Function | Effect |
+| --- | --- |
+| `open` / `show` | Open the dropdown under the bar button |
+| `close` / `hide` | Close the dropdown |
+| `toggle` | Toggle the dropdown |
+| `openCenter` / `openCentered` | Open the dropdown centred on screen |
+| `settings` | Toggle the settings view |
+
+### Session actions
+
+Each runs the underlying command immediately and closes the menu.
+
+| Function | Runs |
+| --- | --- |
+| `lock` | `omarchy-system-lock` |
+| `suspend` | `systemctl suspend` |
+| `hibernate` | `systemctl hibernate` |
+| `logout` | `omarchy-system-logout` |
+| `reboot` | `omarchy-system-reboot` |
+| `shutdown` | `omarchy-system-shutdown` |
+| `caffeinate` | `omarchy-toggle-idle toggle` |
+| `screensaver` | `omarchy-launch-screensaver` |
+| `btop` | `bpytop` or `btop`, focused or raised |
+
+### Timers
+
+`…Timer` opens the centred arming screen. `…TimerArm <seconds>` arms the timer
+without any UI, and `…TimerCancel` clears an armed timer.
+
+| Function | Effect |
+| --- | --- |
+| `rebootTimer` / `openRebootTimer` | Open the reboot arming screen |
+| `shutdownTimer` / `openShutdownTimer` | Open the shutdown arming screen |
+| `rebootTimerArm <seconds>` | Arm a reboot, e.g. `rebootTimerArm 900` |
+| `shutdownTimerArm <seconds>` | Arm a shutdown |
+| `rebootTimerCancel` | Cancel an armed reboot |
+| `shutdownTimerCancel` | Cancel an armed shutdown |
+
+### Introspection
+
+| Function | Returns |
+| --- | --- |
+| `menuItems` | JSON array of the live menu rows, including label, icon, hint and command |
+
+### Example keybindings
+
+```conf
+bind = SUPER CTRL, P, exec, omarchy-shell robbie.power-menu toggle
+bind = SUPER CTRL, L, exec, omarchy-shell robbie.power-menu lock
+bind = SUPER CTRL SHIFT, S, exec, omarchy-shell robbie.power-menu rebootTimerArm 900
+```
+
 ## License
 
 MIT
