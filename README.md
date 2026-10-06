@@ -54,11 +54,10 @@ One command. The plugin is self-contained: the two timer helpers run from
 
 ```sh
 omarchy plugin add https://github.com/RobbieUK1/omarchy-power-menu.git --enable
-omarchy restart shell
 ```
 
 `--enable` is the whole job. It enables the widget and puts it in the bar's
-**right** section on its own, because `barWidget.defaultSection` in
+**right** section immediately, because `barWidget.defaultSection` in
 `manifest.json` says `right`; add `--yes` to skip the placement question and
 take the default. Nothing needs adding to `shell.json` by hand.
 
