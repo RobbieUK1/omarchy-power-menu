@@ -22,6 +22,7 @@
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -35,12 +36,14 @@ LAUNCH_KEY = "system.power-menu"
 
 # Full palette, used only when the widget's IPC answer is unavailable. Mirrors
 # Panel.qml buildAllActions. Rows the default menu defines are skipped anyway.
+SESSION_ACTION = shlex.quote(os.path.join(os.path.dirname(os.path.realpath(__file__)), "bin/session-action"))
+
 _FALLBACK = [
     {"id": "lock", "label": "Lock", "icon": "\uf023", "hint": "Lock the screen", "action": "omarchy-system-lock"},
     {"id": "suspend", "label": "Suspend", "icon": "\uf186", "hint": "Sleep the computer", "action": "systemctl suspend"},
-    {"id": "logout", "label": "Logout", "icon": "\uf08b", "hint": "End this session", "action": "omarchy-system-logout"},
-    {"id": "reboot", "label": "Reboot", "icon": "\uf01e", "hint": "Restart the computer", "action": "omarchy-system-reboot"},
-    {"id": "shutdown", "label": "Shutdown", "icon": "\uf011", "hint": "Power off the computer", "action": "omarchy-system-shutdown"},
+    {"id": "logout", "label": "Logout", "icon": "\uf08b", "hint": "End this session", "action": SESSION_ACTION + " logout"},
+    {"id": "reboot", "label": "Reboot", "icon": "\uf01e", "hint": "Restart the computer", "action": SESSION_ACTION + " reboot"},
+    {"id": "shutdown", "label": "Shutdown", "icon": "\uf011", "hint": "Power off the computer", "action": SESSION_ACTION + " shutdown"},
     {"id": "reboot-timer", "label": "Reboot Timer", "icon": "\uf253", "hint": "Schedule a reboot in a few minutes to hours", "action": "omarchy-shell robbie.power-menu openRebootTimer"},
     {"id": "shutdown-timer", "label": "Shutdown Timer", "icon": "\uf017", "hint": "Schedule a shutdown in a few minutes to hours", "action": "omarchy-shell robbie.power-menu openShutdownTimer"},
     {"id": "update", "label": "Update System", "icon": "\uf021", "hint": "Update Omarchy and system packages", "action": "omarchy-launch-terminal omarchy-update"},
@@ -198,9 +201,40 @@ def managed_entry_lines(items):
     return lines
 
 
+def migrate_session_entries():
+    """Upgrade only exact legacy actions on extension rows we can add.
+
+    Default menu rows and customized action strings remain untouched.
+    """
+    if not os.path.exists(MENU_FILE):
+        return False
+    defaults = default_ids()
+    with open(MENU_FILE, encoding="utf-8") as handle:
+        text = handle.read()
+    lines = text.splitlines(keepends=True)
+    changed = False
+    for i, line in enumerate(lines):
+        for action in ("logout", "reboot", "shutdown"):
+            if action in defaults:
+                continue
+            if not re.match(r'\s*"system\.' + action + r'"\s*:', line):
+                continue
+            pattern = r'("action"\s*:\s*)"omarchy-system-' + action + r'"'
+            replacement = json.dumps(SESSION_ACTION + " " + action)
+            updated = re.sub(pattern, lambda m: m.group(1) + replacement, line)
+            if updated != line:
+                lines[i] = updated
+                changed = True
+    if changed:
+        with open(MENU_FILE, "w", encoding="utf-8") as handle:
+            handle.write("".join(lines))
+    return changed
+
+
 def do_add():
     items, from_live = widget_items()
-    changed = insert_lines(managed_entry_lines(items))
+    changed = migrate_session_entries()
+    changed = insert_lines(managed_entry_lines(items)) or changed
     if from_live:
         changed = prune_stale(items) or changed
     if changed:

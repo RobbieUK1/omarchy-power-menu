@@ -49,7 +49,7 @@ colour, since that state is both urgent and already moving.
 
 ## Install
 
-One command. The plugin is self-contained: the two timer helpers run from
+One command. The plugin is self-contained: the session and timer helpers run from
 `bin/` inside the plugin directory, so there is nothing to copy out afterwards.
 
 ```sh
@@ -91,8 +91,8 @@ That script is deliberately conservative:
 ./add-to-omarchy-menu status   # prints 1 if present, 0 if not
 ```
 
-Both timer actions schedule `omarchy-system-reboot` / `omarchy-system-shutdown`
-on transient user timers with stable unit names, so an armed timer survives a
+Both timer actions schedule the bundled `bin/session-action` helper on transient
+user timers with stable unit names, so an armed timer survives a
 shell restart and can be cancelled from any later session. They can also be run
 by hand:
 
@@ -133,12 +133,23 @@ Each runs the underlying command immediately and closes the menu.
 | `lock` | `omarchy-system-lock` |
 | `suspend` | `systemctl suspend` |
 | `hibernate` | `systemctl hibernate` |
-| `logout` | `omarchy-system-logout` |
-| `reboot` | `omarchy-system-reboot` |
-| `shutdown` | `omarchy-system-shutdown` |
+| `logout` | `omarchy-system logout` (legacy fallback on older Omarchy) |
+| `reboot` | `omarchy-system reboot` (legacy fallback on older Omarchy) |
+| `shutdown` | `omarchy-system shutdown` (legacy fallback on older Omarchy) |
 | `caffeinate` | `omarchy-toggle-idle toggle` |
 | `screensaver` | `omarchy-launch-screensaver` |
 | `btop` | `bpytop` or `btop`, focused or raised |
+
+All three session actions use `bin/session-action`, which prefers Omarchy 4.5’s
+`omarchy-system <action>` and falls back to `omarchy-system-<action>` only when
+the unified command is absent. A failed unified command is never retried through
+the legacy command. Launch-menu entries use the same helper; rerun
+`./add-to-omarchy-menu add` to migrate existing extension entries. Only exact
+legacy action strings are migrated; custom actions and default menu rows are
+preserved. Timers resolve the
+command when they fire, using the PATH captured when armed, so an Omarchy upgrade
+after arming does not leave them calling a removed command. If neither command
+is installed, the helper reports an error and sends a notification when available.
 
 ### Timers
 
@@ -167,6 +178,11 @@ bind = SUPER CTRL, P, exec, omarchy-shell robbie.power-menu toggle
 bind = SUPER CTRL, L, exec, omarchy-shell robbie.power-menu lock
 bind = SUPER CTRL SHIFT, S, exec, omarchy-shell robbie.power-menu rebootTimerArm 900
 ```
+
+## Verification
+
+Run `python3 -m unittest discover -s tests -v`. Tests use fake Omarchy and systemd
+commands; they do not log out, reboot, shut down, or create real timers.
 
 ## License
 

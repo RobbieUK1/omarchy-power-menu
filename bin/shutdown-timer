@@ -2,8 +2,10 @@
 
 # omarchy:summary=Arm or cancel a scheduled shutdown in the user session
 
-# Arms a shutdown that fires after N seconds by scheduling omarchy-system-shutdown
+# Arms a shutdown that fires after N seconds by scheduling the session-action helper
 # on a transient user timer. A stable unit name lets the panel cancel it later.
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy-shutdown-timer"
 UNIT="omarchy-shutdown-timer.timer"
@@ -46,7 +48,7 @@ arm() {
 
   if ! systemd-run --user --collect --quiet --unit="omarchy-shutdown-timer" \
       --on-active="${secs}s" --timer-property=AccuracySec=100ms \
-      omarchy-system-shutdown; then
+      --setenv="PATH=$PATH" "$SCRIPT_DIR/session-action" shutdown; then
     status
     exit 1
   fi

@@ -297,13 +297,17 @@ Panel {
     }
   }
 
+  function sessionCommand(action) {
+    return [root.scriptPath("bin/session-action"), action]
+  }
+
   function buildAllActions() {
     return [
       { id: "lock", icon: "\uf023", label: "Lock", hint: "Lock the screen", command: ["omarchy-system-lock"], dangerous: false },
       { id: "suspend", icon: "\uf186", label: "Suspend", hint: "Sleep the computer", command: ["systemctl", "suspend"], dangerous: false },
-      { id: "logout", icon: "\uf08b", label: "Logout", hint: "End this session", command: ["omarchy-system-logout"], dangerous: true },
-      { id: "reboot", icon: "\uf01e", label: "Reboot", hint: "Restart the computer", command: ["omarchy-system-reboot"], dangerous: true },
-      { id: "shutdown", icon: "\uf011", label: "Shutdown", hint: "Power off the computer", command: ["omarchy-system-shutdown"], dangerous: true },
+      { id: "logout", icon: "\uf08b", label: "Logout", hint: "End this session", command: root.sessionCommand("logout"), dangerous: true },
+      { id: "reboot", icon: "\uf01e", label: "Reboot", hint: "Restart the computer", command: root.sessionCommand("reboot"), dangerous: true },
+      { id: "shutdown", icon: "\uf011", label: "Shutdown", hint: "Power off the computer", command: root.sessionCommand("shutdown"), dangerous: true },
       { id: "reboot-timer", icon: "\uf253", label: "Reboot Timer", hint: "Schedule a reboot in a few minutes to hours", command: [], dangerous: false },
       { id: "shutdown-timer", icon: "\uf017", label: "Shutdown Timer", hint: "Schedule a shutdown in a few minutes to hours", command: [], dangerous: false },
       { id: "update", icon: "\uf021", label: "Update System", hint: "Update Omarchy and system packages", command: ["omarchy-launch-terminal", "omarchy-update"], dangerous: false },
@@ -389,9 +393,9 @@ Panel {
       "lock": "omarchy-system-lock",
       "suspend": "systemctl suspend",
       "hibernate": "systemctl hibernate",
-      "logout": "omarchy-system-logout",
-      "reboot": "omarchy-system-reboot",
-      "shutdown": "omarchy-system-shutdown",
+      "logout": root.shellQuote(root.scriptPath("bin/session-action")) + " logout",
+      "reboot": root.shellQuote(root.scriptPath("bin/session-action")) + " reboot",
+      "shutdown": root.shellQuote(root.scriptPath("bin/session-action")) + " shutdown",
       "update": "omarchy-launch-terminal omarchy-update",
       "restart-shell": "omarchy restart shell",
       "caffeinate": "omarchy-toggle-idle toggle",
@@ -964,16 +968,16 @@ Panel {
     function lock(): void { Quickshell.execDetached(["omarchy-system-lock"]) }
     function suspend(): void { Quickshell.execDetached(["systemctl", "suspend"]) }
     function hibernate(): void { Quickshell.execDetached(["systemctl", "hibernate"]) }
-    function logout(): void { Quickshell.execDetached(["omarchy-system-logout"]) }
-    function reboot(): void { Quickshell.execDetached(["omarchy-system-reboot"]) }
-    function shutdown(): void { Quickshell.execDetached(["omarchy-system-shutdown"]) }
+    function logout(): void { Quickshell.execDetached(root.sessionCommand("logout")) }
+    function reboot(): void { Quickshell.execDetached(root.sessionCommand("reboot")) }
+    function shutdown(): void { Quickshell.execDetached(root.sessionCommand("shutdown")) }
 
     function shutdownTimer(): void { root.openTimer("shutdown") }
-    function shutdownTimerArm(seconds: int): void { root.armTimer(Number(seconds)) }
-    function shutdownTimerCancel(): void { root.cancelTimer() }
+    function shutdownTimerArm(seconds: int): void { root.timerKind = "shutdown"; root.armTimer(Number(seconds)) }
+    function shutdownTimerCancel(): void { root.cancelTimerById("shutdown-timer") }
     function rebootTimer(): void { root.openTimer("reboot") }
-    function rebootTimerArm(seconds: int): void { root.armTimer(Number(seconds)) }
-    function rebootTimerCancel(): void { root.cancelTimer() }
+    function rebootTimerArm(seconds: int): void { root.timerKind = "reboot"; root.armTimer(Number(seconds)) }
+    function rebootTimerCancel(): void { root.cancelTimerById("reboot-timer") }
 
     function caffeinate(): void { Quickshell.execDetached(["omarchy-toggle-idle", "toggle"]) }
     function btop(): void { Quickshell.execDetached(root.btopCommand()) }

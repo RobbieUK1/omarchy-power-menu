@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Shared by direct actions and timers. Resolve at execution time so a timer
+# armed before an Omarchy upgrade can still use the newly installed command.
+case "${1:-}" in
+  logout|reboot|shutdown) action="$1" ;;
+  *) echo 'usage: session-action logout|reboot|shutdown' >&2; exit 2 ;;
+esac
+if [ "$#" -ne 1 ]; then
+  echo 'usage: session-action logout|reboot|shutdown' >&2
+  exit 2
+fi
+
+if command -v omarchy-system >/dev/null 2>&1; then
+  exec omarchy-system "$action"
+elif command -v "omarchy-system-$action" >/dev/null 2>&1; then
+  exec "omarchy-system-$action"
+else
+  message="Power Menu: no Omarchy command available for $action"
+  echo "$message" >&2
+  if command -v omarchy-notification-send >/dev/null 2>&1; then
+    omarchy-notification-send -u critical "Power Menu" "$message"
+  fi
+  exit 127
+fi

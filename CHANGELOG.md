@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Use Omarchy 4.5’s unified `omarchy-system` for logout, reboot and shutdown
+  across panel actions, IPC, generated launch-menu entries and scheduled timers.
+  Older installations fall back to the separate commands when needed.
+- Resolve timer actions when they fire, so removing the legacy commands during
+  an upgrade does not break an already armed timer.
+- Reboot/shutdown timer IPC calls now select the requested timer independently
+  of the currently displayed timer view, including cancellation.
+
 ## 1.2.1
 
 ### Fixed
