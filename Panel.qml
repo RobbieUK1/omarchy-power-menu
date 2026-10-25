@@ -849,7 +849,7 @@ Panel {
       var noun = root.timerNoun().toUpperCase()
       return root.timerArmed ? noun + " IN " + root.formatRemaining(root.timerRemaining) : "SET A " + noun + " TIMER"
     }
-    return root.armedId === "" ? "UT " + root.formatUptime(root.uptimeSeconds, root.uptimeFormat) : "CONFIRM TO CONTINUE"
+    return root.armedId === "" ? "Uptime " + root.formatUptime(root.uptimeSeconds, root.uptimeFormat) : "CONFIRM TO CONTINUE"
   }
 
   function timerTitle() {

@@ -1,3 +1,7 @@
+## 1.4.1
+
+- Spell out the uptime caption label as “Uptime”.
+
 ## 1.4.0
 
 - Replace “MANAGE SESSION” with live system uptime labelled “UT”.

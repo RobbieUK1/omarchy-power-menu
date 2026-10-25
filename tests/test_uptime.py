@@ -42,7 +42,7 @@ assert.equal(JSON.parse(saved).uptimeFormat,'clock');
 assert.deepEqual(JSON.parse(saved).order,['lock']);
 assert.deepEqual(JSON.parse(saved).hidden,{reboot:true});
 loadSettings(saved);
-assert.equal(caption(),'UT 2d 03:04:05');
+assert.equal(caption(),'Uptime 2d 03:04:05');
 root.armedId='shutdown'; assert.equal(caption(),'CONFIRM TO CONTINUE');
 root.view='settings'; assert.equal(caption(),'CUSTOMIZE BUTTONS');
 root.view='timer'; root.timerArmed=true; assert.equal(caption(),'SHUTDOWN IN 01:00');
