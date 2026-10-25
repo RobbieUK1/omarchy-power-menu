@@ -1,3 +1,12 @@
+## 1.3.1
+
+- Fix the header-only, bottom-clipped dropdown on Omarchy 4.5: use per-output
+  bar thickness instead of the full-screen backing window dimensions for
+  placement, available space and bar click forwarding.
+- Fit cards to logical surface dimensions, including small/scaled outputs;
+  preserve centered menus and account for their own padding and borders.
+- Add 2,592 geometry regression cases; preserve session and timer dispatch.
+
 # Changelog
 
 ## Unreleased

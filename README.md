@@ -68,6 +68,19 @@ omarchy plugin enable robbie.power-menu   # goes to the right section
 omarchy bar move robbie.power-menu --section center   # or somewhere else
 ```
 
+## Update
+
+```sh
+omarchy plugin update robbie.power-menu --yes
+```
+
+Plugin code hot-reloads after the update. Version 1.3.1 fixes placement on
+Omarchy 4.5, whose bar uses a full-screen backing window. Dropdowns use the
+painted bar thickness for each display (including notch clearance), with a
+fallback for older shells. Cards fit the output's logical size at fractional
+scaling; long action, settings and timer lists remain scrollable. Centered
+menus keep their existing palette, padding and screen-centered placement.
+
 ## How it works
 
 The widget is the source of truth for which actions exist. It exposes them over
@@ -183,6 +196,15 @@ bind = SUPER CTRL SHIFT, S, exec, omarchy-shell robbie.power-menu rebootTimerArm
 
 Run `python3 -m unittest discover -s tests -v`. Tests use fake Omarchy and systemd
 commands; they do not log out, reboot, shut down, or create real timers.
+Node.js is required for the QML JavaScript tests. The geometry regression
+matrix covers all four bar edges, centered modes, old/new bar APIs, small and
+portrait outputs, and multiple logical sizes and UI scales.
+
+For a desktop smoke test, open the bar dropdown, `openCenter`, settings and
+both timer views on each output. Resize/change scale and verify the card stays
+inside the display, long lists scroll with mouse and keyboard, Escape/outside
+click dismiss, and another bar icon still opens its panel. No power action or
+timer needs to be armed for this check.
 
 ## License
 
