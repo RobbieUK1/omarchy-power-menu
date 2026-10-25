@@ -1,3 +1,9 @@
+## 1.4.0
+
+- Replace “MANAGE SESSION” with live system uptime labelled “UT”.
+- Add persistent Compact, Clock and Total hours choices in both settings views.
+- Read Linux uptime directly while open; preserve confirmation/timer captions.
+
 ## 1.3.1
 
 - Fix the header-only, bottom-clipped dropdown on Omarchy 4.5: use per-output

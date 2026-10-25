@@ -42,6 +42,12 @@ minutes, and the row label, its countdown and the cancel affordance all pulse
 with the bar icon. A pending timer outranks Caffeinate for the bar button's
 colour, since that state is both urgent and already moving.
 
+The Power header shows live system uptime as `UT`. Settings offers Compact
+(`2d 3h 4m`), Clock (`2d 03:04:05`), and Total hours (`51h 04m 05s`).
+The choice is saved alongside button preferences. Uptime includes suspend time
+and refreshes every second while the menu is open; Compact displays minutes.
+Confirmation and timer captions continue to take priority.
+
 ## Requirements
 
 - Omarchy shell

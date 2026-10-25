@@ -40,6 +40,30 @@ Panel {
   // When true (set by the Omarchy-menu openCenter IPC call), the panel is
   // centered on the screen instead of anchored to the bar button.
   property bool centered: false
+  property real uptimeSeconds: 0
+  property string uptimeFormat: "compact"
+  readonly property var uptimeFormats: ["compact", "clock", "hours"]
+
+  function validUptimeFormat(value) {
+    return root.uptimeFormats.indexOf(value) >= 0 ? value : "compact"
+  }
+
+  function formatUptime(seconds, format) {
+    var total = Math.max(0, Math.floor(Number(seconds) || 0))
+    var days = Math.floor(total / 86400)
+    var hours = Math.floor(total / 3600)
+    var minutes = Math.floor(total / 60) % 60
+    var secs = total % 60
+    function pad(value) { return value < 10 ? "0" + value : String(value) }
+    if (format === "clock") return (days ? days + "d " : "") + pad(hours % 24) + ":" + pad(minutes) + ":" + pad(secs)
+    if (format === "hours") return hours + "h " + pad(minutes) + "m " + pad(secs) + "s"
+    return (days ? days + "d " : "") + (hours % 24) + "h " + minutes + "m"
+  }
+
+  function setUptimeFormat(value) {
+    root.uptimeFormat = root.validUptimeFormat(value)
+    root.saveSettings()
+  }
 
   property string view: "actions"
   property var actions: []
@@ -154,6 +178,7 @@ Panel {
   function loadSettings(raw) {
     var data = {}
     try { data = JSON.parse(raw) } catch (e) { data = {} }
+    root.uptimeFormat = root.validUptimeFormat(data.uptimeFormat)
     root.settingsOrder = root.normalizeOrder(data.order)
     root.settingsHidden = (data.hidden && typeof data.hidden === "object") ? data.hidden : {}
     root.settingsDirty = false
@@ -162,6 +187,7 @@ Panel {
 
   function saveSettings() {
     var data = {
+      uptimeFormat: root.uptimeFormat,
       order: root.settingsOrder.slice(),
       hidden: {}
     }
@@ -823,7 +849,7 @@ Panel {
       var noun = root.timerNoun().toUpperCase()
       return root.timerArmed ? noun + " IN " + root.formatRemaining(root.timerRemaining) : "SET A " + noun + " TIMER"
     }
-    return root.armedId === "" ? "MANAGE SESSION" : "CONFIRM TO CONTINUE"
+    return root.armedId === "" ? "UT " + root.formatUptime(root.uptimeSeconds, root.uptimeFormat) : "CONFIRM TO CONTINUE"
   }
 
   function timerTitle() {
@@ -903,6 +929,25 @@ Panel {
     id: timerCancelProc
     command: ["bash", "-lc", root.timerCommand(root.currentTimerId, "cancel")]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyTimerStatus(text, root.timerKind) }
+  }
+
+  // /proc/uptime reports time since boot, including suspend, in seconds.
+  FileView {
+    id: uptimeFile
+    path: "/proc/uptime"
+    printErrors: false
+    onLoaded: {
+      var value = Number(text().trim().split(/\s+/)[0])
+      if (isFinite(value) && value >= 0) root.uptimeSeconds = value
+    }
+  }
+
+  Timer {
+    interval: 1000
+    repeat: true
+    running: root.opened
+    triggeredOnStart: true
+    onTriggered: uptimeFile.reload()
   }
 
   FileView {
@@ -1549,6 +1594,34 @@ Panel {
                   else root.toggleSettingsView()
                 }
               }
+            }
+          }
+
+          Column {
+            visible: root.view === "settings"
+            width: parent.width
+            spacing: Style.space(6)
+
+            Text {
+              text: "Uptime format"
+              textFormat: Text.PlainText
+              color: root.centered ? root.menuText : root.foreground
+              font.family: root.centered ? root.menuFontFamily : root.fontFamily
+              font.pixelSize: Style.font.body
+            }
+
+            ComboBox {
+              width: parent.width
+              model: ["Compact · 2d 3h 4m", "Clock · 2d 03:04:05", "Total hours · 51h 04m 05s"]
+              currentIndex: root.uptimeFormats.indexOf(root.uptimeFormat)
+              onActivated: root.setUptimeFormat(root.uptimeFormats[currentIndex])
+              palette.text: root.centered ? root.menuText : root.foreground
+              palette.buttonText: palette.text
+              palette.button: root.centered ? root.menuBackground : Color.popups.background
+              palette.base: palette.button
+              palette.highlight: root.accent
+              font.family: root.centered ? root.menuFontFamily : root.fontFamily
+              font.pixelSize: Style.font.body
             }
           }
 
